@@ -1,0 +1,53 @@
+name: Temporary Social Video Retrieval
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/retrieve-social-video.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  retrieve:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install media tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+          python -m pip install --upgrade yt-dlp
+
+      - name: Download target reel
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p out
+          yt-dlp --no-playlist --retries 3 --extractor-retries 3 -f "bv*+ba/b" --merge-output-format mp4 -o "out/retrieved-video.%(ext)s" "https://www.instagram.com/reel/DfWjYuxS4kl/"
+          shopt -s nullglob
+          files=(out/*)
+          if [ "${#files[@]}" -eq 0 ]; then
+            echo "ERROR: yt-dlp produced no media file."
+            exit 1
+          fi
+          ls -lah out
+          for f in "${files[@]}"; do
+            file "$f"
+            test -s "$f"
+          done
+
+      - name: Upload temporary video artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: retrieved-social-video
+          path: out/*
+          retention-days: 1
+          if-no-files-found: error
